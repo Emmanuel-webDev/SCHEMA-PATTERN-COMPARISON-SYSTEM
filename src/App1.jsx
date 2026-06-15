@@ -5,7 +5,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 // Solution: Run the included Express proxy server (proxy.js) on localhost:3001
 // The proxy forwards requests server-side where CORS does not apply.
 const GEMINI_MODEL = "gemini-2.5-flash";
-const PROXY_URL    = "http://localhost:3001/gemini";
+const PROXY_URL    = "/api/gemini"; // proxy server endpoint
 
 const EXAMPLES = [
   "A hospital management system that tracks patients, doctors, appointments, prescriptions and billing. Must comply with HIPAA regulations and keep full audit trails of all record changes.",
