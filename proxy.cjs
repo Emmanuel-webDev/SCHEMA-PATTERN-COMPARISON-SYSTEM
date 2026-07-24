@@ -36,6 +36,22 @@ app.use(
 );
 app.use(express.json({ limit: "2mb" }));
 
+// Best-effort in-memory rate limiter — fine here since this is one long-lived
+// local process (unlike the Vercel function, which has no shared state across instances).
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 8;
+const requestLog = new Map();
+
+function isRateLimited(ip) {
+  const now = Date.now();
+  const timestamps = (requestLog.get(ip) || []).filter(
+    (t) => now - t < RATE_LIMIT_WINDOW_MS,
+  );
+  timestamps.push(now);
+  requestLog.set(ip, timestamps);
+  return timestamps.length > RATE_LIMIT_MAX;
+}
+
 // Health check
 app.get("/", (req, res) => {
   res.json({ status: "SPCS Gemini Proxy running", port: PORT });
@@ -43,7 +59,15 @@ app.get("/", (req, res) => {
 
 // Main proxy route
 app.post("/gemini", async (req, res) => {
-  const {model, contents, generationConfig } = req.body;
+  if (isRateLimited(req.ip)) {
+    return res.status(429).json({ error: "Too many requests, please slow down." });
+  }
+
+  const { model, contents, generationConfig } = req.body;
+
+  if (!model || !contents) {
+    return res.status(400).json({ error: "Request must include `model` and `contents`." });
+  }
 
   if (!key) {
     return res.status(400).json({ error: "No API key provided" });
@@ -67,8 +91,11 @@ app.post("/gemini", async (req, res) => {
 
     return res.json(data);
   } catch (err) {
+    // Network-level failures (ECONNRESET, timeouts, DNS errors) throw with the
+    // full request URL in err.message — which contains the API key as a query
+    // param. Never forward that to the client; log it server-side only.
     console.error("Proxy error:", err.message);
-    return res.status(500).json({ error: "Proxy failed: " + err.message });
+    return res.status(502).json({ error: "Network error — please check your connection and try again." });
   }
 });
 
