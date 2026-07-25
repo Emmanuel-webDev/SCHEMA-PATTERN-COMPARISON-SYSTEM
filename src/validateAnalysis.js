@@ -36,6 +36,13 @@ export function parseJson(rawText) {
 }
 
 export function validateOverview(data) {
+  if (data?.isValidProject === false) {
+    throw new Error(
+      data.invalidReason ||
+        "That doesn't look like a project description — please describe an actual system or app you want to build.",
+    );
+  }
+
   requireFields(
     data,
     [
